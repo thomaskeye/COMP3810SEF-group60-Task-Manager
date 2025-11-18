@@ -13,10 +13,23 @@
           <h1>Dashboard</h1>
           <p>Welcome, <strong><%= currentUser && currentUser.username %></strong></p>
         </div>
-        <form method="POST" action="/logout">
-          <button type="submit" class="btn secondary">Logout</button>
-        </form>
+        <div style="display: flex; gap: 0.5rem;">
+          <a href="/change-password" class="btn secondary" style="text-decoration: none; display: inline-block;">Change Password</a>
+          <form method="POST" action="/logout" style="display: inline;">
+            <button type="submit" class="btn secondary">Logout</button>
+          </form>
+        </div>
       </header>
+
+      <% if (typeof error !== 'undefined' && error) { %>
+      <div class="alert error"><%= error %></div>
+      <% } %>
+
+      <% if (typeof success !== 'undefined' && success) { %>
+      <div class="alert success" style="background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+        <%= success %>
+      </div>
+      <% } %>
 
       <section class="card">
         <h2>Create a new task</h2>
@@ -29,6 +42,7 @@
                 id="title"
                 name="title"
                 required
+                maxlength="200"
                 placeholder="e.g. Finish COMP 3810 assignment"
               />
             </div>
@@ -43,6 +57,7 @@
             id="description"
             name="description"
             rows="2"
+            maxlength="2000"
             placeholder="Short description of the task"
           ></textarea>
 

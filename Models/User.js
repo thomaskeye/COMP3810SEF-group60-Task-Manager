@@ -15,13 +15,6 @@ const userSchema = new mongoose.Schema({
     // We store a hash of the password, NOT the plain text password
     type: String,
     required: true
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
   }
 });
 

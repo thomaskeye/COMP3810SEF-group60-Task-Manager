@@ -14,7 +14,7 @@
       <div class="alert error"><%= error %></div>
       <% } %>
 
-      <!-- Simple demo login form (username + optional email) -->
+      <!-- Login form with password authentication -->
       <form method="POST" action="/login" class="card">
         <label for="username">Username</label>
         <input
@@ -22,18 +22,26 @@
           id="username"
           name="username"
           required
+          minlength="3"
+          maxlength="30"
+          pattern="[a-zA-Z0-9_]+"
           placeholder="e.g. student01"
+          title="Username must be 3-30 characters, letters, numbers, and underscores only"
         />
 
-        <label for="email">Email (optional)</label>
+        <label for="password">Password</label>
         <input
-          type="email"
-          id="email"
-          name="email"
-          placeholder="you@example.com"
+          type="password"
+          id="password"
+          name="password"
+          required
+          placeholder="Enter your password"
         />
 
         <button type="submit" class="btn primary">Login</button>
+        <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+          New users will be created automatically on first login.
+        </p>
       </form>
     </div>
   </body>
