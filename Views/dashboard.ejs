@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Smart Task Manager - Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script src="/js/main.js" defer></script>
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Welcome, <strong><%= currentUser && currentUser.username %></strong></p>
+        </div>
+        <form method="POST" action="/logout">
+          <button type="submit" class="btn secondary">Logout</button>
+        </form>
+      </header>
+
+      <section class="card">
+        <h2>Create a new task</h2>
+        <form method="POST" action="/tasks" class="task-form">
+          <div class="grid-2">
+            <div>
+              <label for="title">Title</label>
+              <input
+                type="text"
+                id="title"
+                name="title"
+                required
+                placeholder="e.g. Finish COMP 3810 assignment"
+              />
+            </div>
+            <div>
+              <label for="deadline">Deadline</label>
+              <input type="date" id="deadline" name="deadline" />
+            </div>
+          </div>
+
+          <label for="description">Description</label>
+          <textarea
+            id="description"
+            name="description"
+            rows="2"
+            placeholder="Short description of the task"
+          ></textarea>
+
+          <label for="priority">Priority</label>
+          <select id="priority" name="priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+
+          <button type="submit" class="btn primary">Add Task</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Your tasks</h2>
+
+        <% if (!tasks || tasks.length === 0) { %>
+        <p>No tasks yet. Create your first task above!</p>
+        <% } else { %>
+        <table class="task-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Priority</th>
+              <th>Deadline</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% tasks.forEach(function(task) { %>
+            <tr class="task-row task-<%= task.status %>">
+              <td><%= task.title %></td>
+              <td class="priority-<%= task.priority %>">
+                <%= task.priority %>
+              </td>
+              <td>
+                <%= task.deadline ? task.deadline.toISOString().slice(0,10) : '-' %>
+              </td>
+              <td><%= task.status %></td>
+              <td class="task-actions">
+                <!-- Toggle status -->
+                <form
+                  method="POST"
+                  action="/tasks/<%= task._id %>/status"
+                  class="inline-form"
+                >
+                  <input
+                    type="hidden"
+                    name="status"
+                    value="<%= task.status === 'pending' ? 'done' : 'pending' %>"
+                  />
+                  <button type="submit" class="btn small">
+                    Mark
+                    <%= task.status === 'pending' ? 'Done' : 'Pending' %>
+                  </button>
+                </form>
+
+                <!-- Delete -->
+                <form
+                  method="POST"
+                  action="/tasks/<%= task._id %>/delete"
+                  class="inline-form"
+                  onsubmit="return confirm('Delete this task?');"
+                >
+                  <button type="submit" class="btn danger small">Delete</button>
+                </form>
+              </td>
+            </tr>
+            <% }); %>
+          </tbody>
+        </table>
+        <% } %>
+      </section>
+    </div>
+  </body>
+</html>
+
+

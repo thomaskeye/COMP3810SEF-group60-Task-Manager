@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Smart Task Manager - Login</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Smart Task Manager</h1>
+      <h2>Login</h2>
+
+      <% if (error) { %>
+      <div class="alert error"><%= error %></div>
+      <% } %>
+
+      <!-- Simple demo login form (username + optional email) -->
+      <form method="POST" action="/login" class="card">
+        <label for="username">Username</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          required
+          placeholder="e.g. student01"
+        />
+
+        <label for="email">Email (optional)</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          placeholder="you@example.com"
+        />
+
+        <button type="submit" class="btn primary">Login</button>
+      </form>
+    </div>
+  </body>
+</html>
+
+
