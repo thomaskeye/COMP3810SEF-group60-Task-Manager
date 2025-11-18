@@ -26,23 +26,24 @@ npm install
 
 ### 2. Configure Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Copy the example environment file and update it with your values:
 
-```env
-# MongoDB Connection String
-# Get your connection string from MongoDB Atlas or use local MongoDB
-MONGODB_URI=mongodb://localhost:27017/smart_task_manager
-
-# Server Port (optional, defaults to 3000)
-PORT=3000
-
-# Session Secret Key (required for production)
-# Generate a strong random string with:
-# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-SESSION_SECRET=your-secret-key-here-change-in-production
+```bash
+cp .env.example .env
 ```
 
-**Important:** Never commit your `.env` file to version control. It's already included in `.gitignore`.
+Then edit the `.env` file and update the following variables:
+
+- **MONGODB_URI**: Your MongoDB connection string
+  - For local MongoDB: `mongodb://localhost:27017/smart_task_manager`
+  - For MongoDB Atlas: `mongodb+srv://username:password@cluster.mongodb.net/database`
+- **PORT**: Server port (optional, defaults to 3000)
+- **SESSION_SECRET**: A strong random string for session encryption
+  - Generate one with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+**Important:** 
+- Never commit your `.env` file to version control. It's already included in `.gitignore`.
+- The `.env.example` file is a template with placeholder values and is safe to commit.
 
 ### 3. Run the Application
 
