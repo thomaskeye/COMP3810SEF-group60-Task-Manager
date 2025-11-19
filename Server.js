@@ -45,7 +45,7 @@ mongoose
 // Handle MongoDB disconnection
 mongoose.connection.on("disconnected", () => {
   console.error("MongoDB disconnected. Attempting to reconnect...");
-});
+  });
 
 // ====== Middleware Setup ======
 
@@ -104,9 +104,13 @@ function requireLogin(req, res, next) {
   if (!req.session.user) {
     // If it's an API request, return JSON error
     if (req.path.startsWith("/api/")) {
-      return res.status(401).json({ error: "Authentication required" });
+      return res.status(401).json({ 
+        error: "Authentication required",
+        message: "Your session has expired. Please log in again."
+      });
     }
-    return res.redirect("/login");
+    // For web requests, redirect with error message
+    return res.redirect("/login?error=" + encodeURIComponent("Your session has expired. Please log in again."));
   }
   next();
 }
@@ -127,7 +131,8 @@ app.get("/login", (req, res) => {
   if (req.session.user) {
     return res.redirect("/dashboard");
   }
-  res.render("login", { error: null });
+  const error = req.query.error ? decodeURIComponent(req.query.error) : null;
+  res.render("login", { error });
 });
 
 // Handle login form submit with proper password authentication
@@ -151,43 +156,43 @@ app.post(
 
     const { username, password } = req.body;
 
-    try {
-      let user = await User.findOne({ username });
+  try {
+    let user = await User.findOne({ username });
 
-      if (!user) {
+    if (!user) {
         // If user does not exist, create a new user with hashed password
         const passwordHash = await bcrypt.hash(password, 10);
-        user = new User({
-          username,
+      user = new User({
+        username,
           passwordHash
-        });
-        await user.save();
+      });
+      await user.save();
       } else {
         // User exists, verify password
         const passwordMatch = await bcrypt.compare(password, user.passwordHash);
         if (!passwordMatch) {
           return res.status(401).render("login", {
-            error: "Invalid username or password"
+            error: "Invalid username or password. Please check your credentials and try again."
           });
         }
-      }
+    }
 
-      // Store a minimal user object in the session
-      req.session.user = {
-        id: user._id.toString(),
+    // Store a minimal user object in the session
+    req.session.user = {
+      id: user._id.toString(),
         username: user.username
-      };
+    };
 
-      res.redirect("/dashboard");
-    } catch (err) {
-      console.error("Login error:", err);
+    res.redirect("/dashboard");
+  } catch (err) {
+    console.error("Login error:", err);
       // Handle duplicate key errors
       if (err.code === 11000) {
         return res.status(400).render("login", {
           error: "Username already exists"
         });
       }
-      res.status(500).render("login", { error: "Login failed. Try again." });
+    res.status(500).render("login", { error: "Login failed. Try again." });
     }
   }
 );
@@ -269,6 +274,7 @@ app.post(
 app.get("/dashboard", requireLogin, async (req, res) => {
   try {
     const tasks = await Task.find({ userId: req.session.user.id }).sort({
+      order: 1,
       deadline: 1
     });
     const error = req.query.error ? decodeURIComponent(req.query.error) : null;
@@ -310,24 +316,28 @@ app.post(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      // For form submissions, redirect back with error (could be improved with flash messages)
-      return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errors.array()[0].msg));
+      // For form submissions, redirect back with user-friendly error message
+      const errorMsg = errors.array()[0].msg || "Invalid task input. Please check your data and try again.";
+      return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errorMsg));
     }
 
-    const { title, description, priority, deadline } = req.body;
-    try {
-      await Task.create({
+  const { title, description, priority, deadline } = req.body;
+  try {
+    await Task.create({
         title: title.trim(),
         description: description ? description.trim() : "",
-        priority: priority || "medium",
-        deadline: deadline ? new Date(deadline) : undefined,
-        userId: req.session.user.id
-      });
-      res.redirect("/dashboard");
-    } catch (err) {
-      console.error("Create task error:", err);
-      res.status(500).send("Error creating task");
-    }
+      priority: priority || "medium",
+      deadline: deadline ? new Date(deadline) : undefined,
+      userId: req.session.user.id
+    });
+    res.redirect("/dashboard?success=" + encodeURIComponent("Task created successfully!"));
+  } catch (err) {
+    console.error("Create task error:", err);
+    const errorMsg = err.name === "ValidationError" 
+      ? "Invalid task data. Please check your input and try again."
+      : "Failed to create task. Please try again.";
+    res.status(500).redirect("/dashboard?error=" + encodeURIComponent(errorMsg));
+  }
   }
 );
 
@@ -352,22 +362,22 @@ app.post(
       return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errors.array()[0].msg));
     }
 
-    const { id } = req.params;
+  const { id } = req.params;
     const { status } = req.body;
-    try {
+  try {
       const task = await Task.findOneAndUpdate(
-        { _id: id, userId: req.session.user.id },
+      { _id: id, userId: req.session.user.id },
         { status },
         { new: true }
-      );
+    );
       if (!task) {
-        return res.status(404).send("Task not found");
+        return res.status(404).redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
       }
-      res.redirect("/dashboard");
-    } catch (err) {
-      console.error("Update task status error:", err);
-      res.status(500).send("Error updating task");
-    }
+    res.redirect("/dashboard?success=" + encodeURIComponent("Task status updated successfully!"));
+  } catch (err) {
+    console.error("Update task status error:", err);
+    res.status(500).redirect("/dashboard?error=" + encodeURIComponent("Failed to update task. Please try again."));
+  }
   }
 );
 
@@ -389,17 +399,17 @@ app.post(
       return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errors.array()[0].msg));
     }
 
-    const { id } = req.params;
-    try {
+  const { id } = req.params;
+  try {
       const task = await Task.findOneAndDelete({ _id: id, userId: req.session.user.id });
       if (!task) {
-        return res.status(404).send("Task not found");
+        return res.status(404).redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
       }
-      res.redirect("/dashboard");
-    } catch (err) {
-      console.error("Delete task error:", err);
-      res.status(500).send("Error deleting task");
-    }
+    res.redirect("/dashboard?success=" + encodeURIComponent("Task deleted successfully!"));
+  } catch (err) {
+    console.error("Delete task error:", err);
+    res.status(500).redirect("/dashboard?error=" + encodeURIComponent("Failed to delete task. Please try again."));
+  }
   }
 );
 
@@ -410,6 +420,7 @@ app.post(
 app.get("/api/tasks", requireLogin, async (req, res) => {
   try {
     const tasks = await Task.find({ userId: req.session.user.id }).sort({
+      order: 1,
       deadline: 1
     });
     res.json(tasks);
@@ -418,6 +429,50 @@ app.get("/api/tasks", requireLogin, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch tasks" });
   }
 });
+
+// POST /api/tasks/reorder - update task order after drag-and-drop
+app.post(
+  "/api/tasks/reorder",
+  requireLogin,
+  [
+    body("taskIds")
+      .isArray()
+      .withMessage("taskIds must be an array")
+      .notEmpty()
+      .withMessage("taskIds cannot be empty")
+  ],
+  handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { taskIds } = req.body;
+      const userId = req.session.user.id;
+
+      // Verify all tasks belong to the user
+      const tasks = await Task.find({
+        _id: { $in: taskIds },
+        userId: userId
+      });
+
+      if (tasks.length !== taskIds.length) {
+        return res.status(403).json({ error: "Some tasks not found or unauthorized" });
+      }
+
+      // Update order for each task
+      const updatePromises = taskIds.map((taskId, index) => {
+        return Task.updateOne(
+          { _id: taskId, userId: userId },
+          { order: index }
+        );
+      });
+
+      await Promise.all(updatePromises);
+      res.json({ message: "Tasks reordered successfully" });
+    } catch (err) {
+      console.error("API reorder tasks error:", err);
+      res.status(500).json({ error: "Failed to reorder tasks" });
+    }
+  }
+);
 
 // POST /api/tasks - create a new task
 app.post(
@@ -446,20 +501,20 @@ app.post(
   ],
   handleValidationErrors,
   async (req, res) => {
-    const { title, description, priority, deadline } = req.body;
-    try {
-      const task = await Task.create({
+  const { title, description, priority, deadline } = req.body;
+  try {
+    const task = await Task.create({
         title: title.trim(),
         description: description ? description.trim() : "",
-        priority: priority || "medium",
-        deadline: deadline ? new Date(deadline) : undefined,
-        userId: req.session.user.id
-      });
-      res.status(201).json(task);
-    } catch (err) {
-      console.error("API create task error:", err);
-      res.status(500).json({ error: "Failed to create task" });
-    }
+      priority: priority || "medium",
+      deadline: deadline ? new Date(deadline) : undefined,
+      userId: req.session.user.id
+    });
+    res.status(201).json(task);
+  } catch (err) {
+    console.error("API create task error:", err);
+    res.status(500).json({ error: "Failed to create task" });
+  }
   }
 );
 
@@ -501,8 +556,8 @@ app.put(
   ],
   handleValidationErrors,
   async (req, res) => {
-    const { id } = req.params;
-    const { title, description, priority, deadline, status } = req.body;
+  const { id } = req.params;
+  const { title, description, priority, deadline, status } = req.body;
 
     // Build update object only with provided fields
     const updateData = {};
@@ -512,22 +567,22 @@ app.put(
     if (status !== undefined) updateData.status = status;
     if (deadline !== undefined) updateData.deadline = deadline ? new Date(deadline) : null;
 
-    try {
-      const task = await Task.findOneAndUpdate(
-        { _id: id, userId: req.session.user.id },
+  try {
+    const task = await Task.findOneAndUpdate(
+      { _id: id, userId: req.session.user.id },
         updateData,
         { new: true, runValidators: true }
-      );
-      if (!task) {
-        return res.status(404).json({ error: "Task not found" });
-      }
-      res.json(task);
-    } catch (err) {
-      console.error("API update task error:", err);
+    );
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+    res.json(task);
+  } catch (err) {
+    console.error("API update task error:", err);
       if (err.name === "ValidationError") {
         return res.status(400).json({ error: "Validation error", details: err.message });
       }
-      res.status(500).json({ error: "Failed to update task" });
+    res.status(500).json({ error: "Failed to update task" });
     }
   }
 );
@@ -546,20 +601,20 @@ app.delete(
   ],
   handleValidationErrors,
   async (req, res) => {
-    const { id } = req.params;
-    try {
-      const task = await Task.findOneAndDelete({
-        _id: id,
-        userId: req.session.user.id
-      });
-      if (!task) {
-        return res.status(404).json({ error: "Task not found" });
-      }
-      res.json({ message: "Task deleted" });
-    } catch (err) {
-      console.error("API delete task error:", err);
-      res.status(500).json({ error: "Failed to delete task" });
+  const { id } = req.params;
+  try {
+    const task = await Task.findOneAndDelete({
+      _id: id,
+      userId: req.session.user.id
+    });
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
     }
+    res.json({ message: "Task deleted" });
+  } catch (err) {
+    console.error("API delete task error:", err);
+    res.status(500).json({ error: "Failed to delete task" });
+  }
   }
 );
 

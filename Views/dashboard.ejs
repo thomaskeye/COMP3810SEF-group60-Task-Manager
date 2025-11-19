@@ -4,7 +4,84 @@
     <meta charset="UTF-8" />
     <title>Smart Task Manager - Dashboard</title>
     <link rel="stylesheet" href="/css/styles.css" />
-    <script src="/js/main.js" defer></script>
+    <!-- FullCalendar CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet" />
+    <style>
+      .view-toggle {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      .view-toggle button {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        background: white;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .view-toggle button.active {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+      }
+      .view-container {
+        display: none;
+      }
+      .view-container.active {
+        display: block;
+      }
+      .task-list {
+        list-style: none;
+        padding: 0;
+      }
+      .task-item {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        cursor: move;
+        transition: box-shadow 0.2s;
+      }
+      .task-item:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      .task-item.sortable-ghost {
+        opacity: 0.4;
+      }
+      .task-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 0.5rem;
+      }
+      .task-item-title {
+        font-weight: 600;
+        font-size: 1.1rem;
+      }
+      .task-item-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.9rem;
+        color: #6b7280;
+        margin-top: 0.5rem;
+      }
+      .task-item-description {
+        color: #4b5563;
+        margin-top: 0.5rem;
+      }
+      .task-item-actions {
+        display: flex;
+        gap: 0.5rem;
+      }
+      #calendar {
+        max-width: 100%;
+        margin: 0 auto;
+      }
+      .fc-event {
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <div class="container">
@@ -33,7 +110,7 @@
 
       <section class="card">
         <h2>Create a new task</h2>
-        <form method="POST" action="/tasks" class="task-form">
+        <form method="POST" action="/tasks" class="task-form" id="taskForm">
           <div class="grid-2">
             <div>
               <label for="title">Title</label>
@@ -75,66 +152,84 @@
       <section class="card">
         <h2>Your tasks</h2>
 
-        <% if (!tasks || tasks.length === 0) { %>
-        <p>No tasks yet. Create your first task above!</p>
-        <% } else { %>
-        <table class="task-table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Priority</th>
-              <th>Deadline</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% tasks.forEach(function(task) { %>
-            <tr class="task-row task-<%= task.status %>">
-              <td><%= task.title %></td>
-              <td class="priority-<%= task.priority %>">
-                <%= task.priority %>
-              </td>
-              <td>
-                <%= task.deadline ? task.deadline.toISOString().slice(0,10) : '-' %>
-              </td>
-              <td><%= task.status %></td>
-              <td class="task-actions">
-                <!-- Toggle status -->
-                <form
-                  method="POST"
-                  action="/tasks/<%= task._id %>/status"
-                  class="inline-form"
-                >
-                  <input
-                    type="hidden"
-                    name="status"
-                    value="<%= task.status === 'pending' ? 'done' : 'pending' %>"
-                  />
-                  <button type="submit" class="btn small">
-                    Mark
-                    <%= task.status === 'pending' ? 'Done' : 'Pending' %>
-                  </button>
-                </form>
+        <div class="view-toggle">
+          <button id="listViewBtn" class="active">List View</button>
+          <button id="calendarViewBtn">Calendar View</button>
+        </div>
 
-                <!-- Delete -->
-                <form
-                  method="POST"
-                  action="/tasks/<%= task._id %>/delete"
-                  class="inline-form"
-                  onsubmit="return confirm('Delete this task?');"
-                >
-                  <button type="submit" class="btn danger small">Delete</button>
-                </form>
-              </td>
-            </tr>
+        <!-- List View -->
+        <div id="listView" class="view-container active">
+          <% if (!tasks || tasks.length === 0) { %>
+          <p>No tasks yet. Create your first task above!</p>
+          <% } else { %>
+          <ul class="task-list" id="taskList">
+            <% tasks.forEach(function(task) { %>
+            <li class="task-item" data-task-id="<%= task._id %>">
+              <div class="task-item-header">
+                <div>
+                  <div class="task-item-title"><%= task.title %></div>
+                  <% if (task.description) { %>
+                  <div class="task-item-description"><%= task.description %></div>
+                  <% } %>
+                  <div class="task-item-meta">
+                    <span class="priority-<%= task.priority %>">
+                      Priority: <%= task.priority %>
+                    </span>
+                    <span>
+                      Deadline: <%= task.deadline ? task.deadline.toISOString().slice(0,10) : 'No deadline' %>
+                    </span>
+                    <span>Status: <%= task.status %></span>
+                  </div>
+                </div>
+                <div class="task-item-actions">
+                  <!-- Toggle status -->
+                  <form
+                    method="POST"
+                    action="/tasks/<%= task._id %>/status"
+                    class="inline-form"
+                  >
+                    <input
+                      type="hidden"
+                      name="status"
+                      value="<%= task.status === 'pending' ? 'done' : 'pending' %>"
+                    />
+                    <button type="submit" class="btn small">
+                      Mark <%= task.status === 'pending' ? 'Done' : 'Pending' %>
+                    </button>
+                  </form>
+
+                  <!-- Delete -->
+                  <form
+                    method="POST"
+                    action="/tasks/<%= task._id %>/delete"
+                    class="inline-form"
+                    onsubmit="return confirm('Delete this task?');"
+                  >
+                    <button type="submit" class="btn danger small">Delete</button>
+                  </form>
+                </div>
+              </div>
+            </li>
             <% }); %>
-          </tbody>
-        </table>
-        <% } %>
+          </ul>
+          <% } %>
+        </div>
+
+        <!-- Calendar View -->
+        <div id="calendarView" class="view-container">
+          <div id="calendar"></div>
+        </div>
       </section>
     </div>
+
+    <!-- SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- FullCalendar JS -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <script src="/js/main.js"></script>
+    <script>
+      // Initialize tasks data for JavaScript
+      const tasksData = <%- JSON.stringify(tasks || []) %>;
+    </script>
   </body>
 </html>
-
-

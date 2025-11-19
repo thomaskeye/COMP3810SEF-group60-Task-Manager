@@ -30,6 +30,11 @@ const taskSchema = new mongoose.Schema(
       enum: ["pending", "done"],
       default: "pending"
     },
+    order: {
+      // Order index for drag-and-drop sorting
+      type: Number,
+      default: 0
+    },
     userId: {
       // Reference to the User who owns this task
       type: mongoose.Schema.Types.ObjectId,
