@@ -5,7 +5,7 @@ Group project of group 60
 
 A full-stack task management application built with Express.js, MongoDB, and EJS. Features include user authentication, task CRUD operations, drag-and-drop task ordering, calendar view, and a RESTful API.
 
-**Live Demo: https://comp3810sef-group60-task-manger.onrender.com
+**Live Demo:** [Your Render URL Here] (e.g., `https://comp3810sef-group60-task-manger.onrender.com`)
 
 ## Features
 
