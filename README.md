@@ -75,9 +75,8 @@ This application is configured for deployment on [Render](https://render.com), a
 ### Prerequisites
 
 Before deploying, ensure you have:
-- A GitHub repository with your code
+- A GitHub repository with your code (already connected to Render)
 - A MongoDB Atlas account (free tier available)
-- A Render account (free tier available)
 
 ### Step-by-Step Deployment Guide
 
@@ -101,21 +100,20 @@ Before deploying, ensure you have:
 
 #### 2. Deploy to Render
 
-1. **Sign up/Login** to [Render](https://render.com) and connect your GitHub account
-
-2. **Create a new Web Service:**
-   - Click "New +" → "Web Service"
-   - Select your GitHub repository
+1. **Create a new Web Service:**
+   - In your Render dashboard, click "New +" → "Web Service"
+   - Your GitHub repository should already be connected
+   - Select your repository from the list
    - Choose the branch to deploy (usually `main` or `master`)
 
-3. **Configure the service:**
+2. **Configure the service:**
    - **Name:** Choose a name for your service (e.g., `smart-task-manager`)
-   - **Environment:** Select "Node"
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
+   - **Environment:** Select "Node" (auto-detected)
+   - **Build Command:** `npm install` (auto-filled)
+   - **Start Command:** `npm start` (auto-filled from package.json)
    - **Plan:** Free tier is sufficient for demos
 
-4. **Add Environment Variables:**
+3. **Add Environment Variables:**
    Click "Advanced" → "Add Environment Variable" and add:
    - `MONGODB_URI`: Your MongoDB Atlas connection string (from step 1)
    - `SESSION_SECRET`: Generate a strong random secret:
@@ -125,7 +123,7 @@ Before deploying, ensure you have:
    - `NODE_ENV`: `production`
    - `PORT`: Leave empty (Render sets this automatically)
 
-5. **Deploy:**
+4. **Deploy:**
    - Click "Create Web Service"
    - Render will automatically build and deploy your application
    - Wait for the build to complete (usually 2-5 minutes)
@@ -269,7 +267,6 @@ For detailed API documentation with all endpoints, see [demo.md](./demo.md).
 │       └── main.js      # Frontend JavaScript (drag-and-drop, calendar)
 ├── Server.js            # Main server file
 ├── package.json         # Dependencies and scripts
-├── Procfile             # Heroku deployment configuration
 ├── demo.md              # Demo guide with CURL examples
 └── .env                 # Environment variables (not in git)
 ```
