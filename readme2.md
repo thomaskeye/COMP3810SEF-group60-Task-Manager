@@ -1,6 +1,8 @@
 # COMP3810SEF Group60 Project
 ## Project infomation
-Group number: 60 
+Group number: 
+
+60 
 
 Members:
 
