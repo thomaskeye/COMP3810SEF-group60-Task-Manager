@@ -59,6 +59,11 @@ if (!SESSION_SECRET) {
   console.warn("WARNING: SESSION_SECRET not set. Using default (insecure for production).");
 }
 
+// When running behind a proxy (e.g. Render, Heroku), trust the first proxy so secure cookies work
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 app.use(
   cookieSession({
     name: "session",
@@ -156,43 +161,87 @@ app.post(
 
     const { username, password } = req.body;
 
-  try {
-    let user = await User.findOne({ username });
+    try {
+      const user = await User.findOne({ username });
 
-    if (!user) {
-        // If user does not exist, create a new user with hashed password
-        const passwordHash = await bcrypt.hash(password, 10);
-      user = new User({
-        username,
-          passwordHash
-      });
-      await user.save();
-      } else {
-        // User exists, verify password
-        const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!passwordMatch) {
-          return res.status(401).render("login", {
-            error: "Invalid username or password. Please check your credentials and try again."
-          });
-        }
-    }
-
-    // Store a minimal user object in the session
-    req.session.user = {
-      id: user._id.toString(),
-        username: user.username
-    };
-
-    res.redirect("/dashboard");
-  } catch (err) {
-    console.error("Login error:", err);
-      // Handle duplicate key errors
-      if (err.code === 11000) {
-        return res.status(400).render("login", {
-          error: "Username already exists"
+      if (!user) {
+        return res.status(404).render("login", {
+          error: "Account not found. Please register first."
         });
       }
-    res.status(500).render("login", { error: "Login failed. Try again." });
+
+      const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+      if (!passwordMatch) {
+        return res.status(401).render("login", {
+          error: "Invalid username or password. Please try again."
+        });
+      }
+
+      // Store a minimal user object in the session
+      req.session.user = {
+        id: user._id.toString(),
+        username: user.username
+      };
+
+      res.redirect("/dashboard");
+    } catch (err) {
+      console.error("Login error:", err);
+      res.status(500).render("login", { error: "Login failed. Try again." });
+    }
+  }
+);
+
+// Show register form
+app.get("/register", (req, res) => {
+  if (req.session.user) {
+    return res.redirect("/dashboard");
+  }
+  const error = req.query.error ? decodeURIComponent(req.query.error) : null;
+  res.render("register", { error });
+});
+
+// Handle registration
+app.post(
+  "/register",
+  [
+    body("username")
+      .trim()
+      .isLength({ min: 3, max: 30 })
+      .withMessage("Username must be between 3 and 30 characters")
+      .matches(/^[a-zA-Z0-9_]+$/)
+      .withMessage("Username can only contain letters, numbers, and underscores"),
+    body("password").isLength({ min: 1 }).withMessage("Password is required")
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).render("register", {
+        error: errors.array()[0].msg
+      });
+    }
+
+    const { username, password } = req.body;
+
+    try {
+      const existingUser = await User.findOne({ username });
+      if (existingUser) {
+        return res.status(400).render("register", {
+          error: "Username already exists. Please choose another."
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await User.create({ username, passwordHash });
+
+      req.session.user = {
+        id: user._id.toString(),
+        username: user.username
+      };
+
+      res.redirect("/dashboard");
+    } catch (err) {
+      console.error("Register error:", err);
+      res.status(500).render("register", { error: "Registration failed. Try again." });
     }
   }
 );

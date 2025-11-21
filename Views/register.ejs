@@ -2,20 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Smart Task Manager - Login</title>
+    <title>Smart Task Manager - Register</title>
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
     <div class="container">
       <h1>Smart Task Manager</h1>
-      <h2>Login</h2>
+      <h2>Create Account</h2>
 
       <% if (error) { %>
       <div class="alert error"><%= error %></div>
       <% } %>
 
-      <!-- Login form with password authentication -->
-      <form method="POST" action="/login" class="card">
+      <form method="POST" action="/register" class="card">
         <label for="username">Username</label>
         <input
           type="text"
@@ -25,7 +24,7 @@
           minlength="3"
           maxlength="30"
           pattern="[a-zA-Z0-9_]+"
-          placeholder="e.g. student01"
+          placeholder="Choose a username"
           title="Username must be 3-30 characters, letters, numbers, and underscores only"
         />
 
@@ -35,17 +34,16 @@
           id="password"
           name="password"
           required
-          placeholder="Enter your password"
+          placeholder="Choose any password"
         />
 
-        <button type="submit" class="btn primary">Login</button>
+        <button type="submit" class="btn primary">Register</button>
         <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
-          Don't have an account?
-          <a href="/register" style="color: #007bff; text-decoration: none;">Register here</a>.
+          Already have an account?
+          <a href="/login" style="color: #007bff; text-decoration: none;">Back to login</a>.
         </p>
       </form>
     </div>
   </body>
 </html>
-
 
