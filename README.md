@@ -11,6 +11,7 @@ A full-stack task management application built with Express.js, MongoDB, and EJS
 
 - ✅ Simple username/password authentication
 - ✅ "Login with Google" (OAuth 2.0) option
+- ✅ Server-side sessions via express-session + Passport
 - ✅ Task CRUD operations (Create, Read, Update, Delete)
 - ✅ Task prioritization (low, medium, high)
 - ✅ Task status tracking (pending, done)
@@ -149,12 +150,12 @@ See [demo.md](./demo.md) for comprehensive CURL examples and API documentation.
 # Get all tasks (requires authentication)
 curl -X GET http://localhost:3000/api/tasks \
   -H "Content-Type: application/json" \
-  -b "session=YOUR_SESSION_COOKIE"
+  -b "stm.sid=YOUR_SESSION_COOKIE"
 
 # Create a new task
 curl -X POST http://localhost:3000/api/tasks \
   -H "Content-Type: application/json" \
-  -b "session=YOUR_SESSION_COOKIE" \
+  -b "stm.sid=YOUR_SESSION_COOKIE" \
   -d '{
     "title": "Complete project documentation",
     "description": "Write comprehensive README",
@@ -165,7 +166,7 @@ curl -X POST http://localhost:3000/api/tasks \
 # Update a task
 curl -X PUT http://localhost:3000/api/tasks/TASK_ID \
   -H "Content-Type: application/json" \
-  -b "session=YOUR_SESSION_COOKIE" \
+  -b "stm.sid=YOUR_SESSION_COOKIE" \
   -d '{
     "status": "done"
   }'
@@ -173,14 +174,14 @@ curl -X PUT http://localhost:3000/api/tasks/TASK_ID \
 # Delete a task
 curl -X DELETE http://localhost:3000/api/tasks/TASK_ID \
   -H "Content-Type: application/json" \
-  -b "session=YOUR_SESSION_COOKIE"
+  -b "stm.sid=YOUR_SESSION_COOKIE"
 ```
 
 For detailed API documentation with all endpoints, see [demo.md](./demo.md).
 
 ## Security Notes
 
-- ✅ httpOnly cookie-session storage (secure flag automatically enabled in production)
+- ✅ httpOnly express-session cookies (only a session ID is stored client-side; user data stays on the server)
 - ✅ Optional Google OAuth 2.0 login with verified Google accounts
 - ⚠️ Passwords created via the Register page are stored as plain text (demo only)
 - ⚠️ Server-side validation is intentionally minimal so you can experiment freely

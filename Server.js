@@ -2,14 +2,15 @@
 // This file wires up:
 // - Express app and middleware
 // - MongoDB connection using Mongoose
-// - cookie-session for simple authentication
+// - express-session + Passport for authentication
 // - EJS view engine
 // - Basic routes for login/logout and task CRUD + API
 
 const express = require("express");
 const mongoose = require("mongoose");
-const cookieSession = require("cookie-session");
+const session = require("express-session");
 const passport = require("passport");
+const LocalStrategy = require("passport-local").Strategy;
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const path = require("path");
 require("dotenv").config();
@@ -53,7 +54,7 @@ mongoose.connection.on("disconnected", () => {
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.json({ limit: "10mb" }));
 
-// Configure cookie-session to store a simple session object on req.session
+// Configure session handling (express-session + Passport)
 const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
   console.warn("WARNING: SESSION_SECRET not set. Using default (insecure for production).");
@@ -69,23 +70,69 @@ if (!googleAuthEnabled) {
   console.warn("Google OAuth not fully configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.");
 }
 
+passport.use(
+  new LocalStrategy(async (username, password, done) => {
+    try {
+      const user = await User.findOne({ username });
+      if (!user) {
+        return done(null, false, { message: "Invalid username or password." });
+      }
+      if (!user.password) {
+        return done(null, false, { message: "This account uses Google login. Please continue with Google." });
+      }
+      if (user.password !== password) {
+        return done(null, false, { message: "Invalid username or password." });
+      }
+      return done(null, user);
+    } catch (err) {
+      return done(err);
+    }
+  })
+);
+
+passport.serializeUser((user, done) => {
+  done(null, user.id || user._id.toString());
+});
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    if (!user) {
+      return done(null, false);
+    }
+    done(null, {
+      id: user._id.toString(),
+      username: user.username,
+      displayName: user.displayName || user.username,
+      googleUser: Boolean(user.googleId)
+    });
+  } catch (err) {
+    done(err);
+  }
+});
+
 // When running behind a proxy (e.g. Render, Heroku), trust the first proxy so secure cookies work
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
 app.use(
-  cookieSession({
-    name: "session",
-    keys: [SESSION_SECRET || "dev_secret_key_change_in_production"],
-    maxAge: 24 * 60 * 60 * 1000, // 1 day
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production", // Only send over HTTPS in production
-    sameSite: "lax"
+  session({
+    name: "stm.sid",
+    secret: SESSION_SECRET || "dev_secret_key_change_in_production",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax"
+    }
   })
 );
 
 app.use(passport.initialize());
+app.use(passport.session());
 
 if (googleAuthEnabled) {
   passport.use(
@@ -116,12 +163,7 @@ if (googleAuthEnabled) {
             await user.save();
           }
 
-          return done(null, {
-            id: user._id.toString(),
-            username: user.username,
-            displayName: user.displayName || user.username,
-            googleUser: true
-          });
+          return done(null, user);
         } catch (err) {
           return done(err);
         }
@@ -137,33 +179,32 @@ app.use(express.static(path.join(__dirname, "Public")));
 
 // Make user info available in all EJS templates (if logged in)
 app.use((req, res, next) => {
-  res.locals.currentUser = req.session.user || null;
+  res.locals.currentUser = req.user || null;
   next();
 });
 
-// ====== Simple Auth Middleware ======
+// ====== Auth Helpers ======
 
-// Protect routes that require a logged-in user
-function requireLogin(req, res, next) {
-  if (!req.session.user) {
-    // If it's an API request, return JSON error
-    if (req.path.startsWith("/api/")) {
-      return res.status(401).json({ 
-        error: "Authentication required",
-        message: "Your session has expired. Please log in again."
-      });
-    }
-    // For web requests, redirect with error message
-    return res.redirect("/login?error=" + encodeURIComponent("Your session has expired. Please log in again."));
+function isLoggedIn(req, res, next) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
   }
-  next();
+
+  if (req.originalUrl && req.originalUrl.startsWith("/api/")) {
+    return res.status(401).json({
+      error: "Authentication required",
+      message: "Your session has expired. Please log in again."
+    });
+  }
+
+  return res.redirect("/login?error=" + encodeURIComponent("Your session has expired. Please log in again."));
 }
 
 // ====== Routes: Pages ======
 
 // Redirect root to dashboard or login depending on auth state
 app.get("/", (req, res) => {
-  if (req.session.user) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
     return res.redirect("/dashboard");
   }
   res.redirect("/login");
@@ -171,45 +212,42 @@ app.get("/", (req, res) => {
 
 // Show login form
 app.get("/login", (req, res) => {
-  // If already logged in, go straight to dashboard
-  if (req.session.user) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
     return res.redirect("/dashboard");
   }
   const error = req.query.error ? decodeURIComponent(req.query.error) : null;
   res.render("login", { error });
 });
 
-// Handle login form submit (simple password check)
-app.post("/login", async (req, res) => {
+// Handle login form submit
+app.post("/login", (req, res, next) => {
   const { username, password } = req.body;
-
   if (!username || !password) {
     return res.render("login", { error: "Please enter both username and password." });
   }
 
-  try {
-    const user = await User.findOne({ username });
-
-    if (!user || user.password !== password) {
-      return res.render("login", { error: "Invalid username or password." });
+  passport.authenticate("local", (err, user, info) => {
+    if (err) {
+      console.error("Login error:", err);
+      return res.render("login", { error: "Login failed. Try again later." });
+    }
+    if (!user) {
+      return res.render("login", { error: (info && info.message) || "Invalid username or password." });
     }
 
-    req.session.user = {
-      id: user._id.toString(),
-      username: user.username,
-      displayName: user.displayName || user.username
-    };
-
-    res.redirect("/dashboard");
-  } catch (err) {
-    console.error("Login error:", err);
-    res.render("login", { error: "Login failed. Try again later." });
-  }
+    req.logIn(user, (loginErr) => {
+      if (loginErr) {
+        console.error("Login session error:", loginErr);
+        return res.render("login", { error: "Login failed. Try again later." });
+      }
+      return res.redirect("/dashboard");
+    });
+  })(req, res, next);
 });
 
 // Show register form
 app.get("/register", (req, res) => {
-  if (req.session.user) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
     return res.redirect("/dashboard");
   }
   const error = req.query.error ? decodeURIComponent(req.query.error) : null;
@@ -232,13 +270,13 @@ app.post("/register", async (req, res) => {
 
     const user = await User.create({ username, password, displayName: username });
 
-    req.session.user = {
-      id: user._id.toString(),
-      username: user.username,
-      displayName: user.displayName || user.username
-    };
-
-    res.redirect("/dashboard");
+    req.logIn(user, (loginErr) => {
+      if (loginErr) {
+        console.error("Register login error:", loginErr);
+        return res.render("register", { error: "Account created, but login failed. Please try signing in." });
+      }
+      return res.redirect("/dashboard");
+    });
   } catch (err) {
     console.error("Register error:", err);
     res.render("register", { error: "Registration failed. Try again later." });
@@ -256,36 +294,41 @@ app.get("/auth/google", (req, res, next) => {
   })(req, res, next);
 });
 
-app.get("/auth/google/callback", (req, res, next) => {
-  if (!googleAuthEnabled) {
-    return res.redirect("/login?error=" + encodeURIComponent("Google login is not configured."));
-  }
-  passport.authenticate("google", { session: false }, (err, userProfile) => {
-    if (err || !userProfile) {
-      console.error("Google login error:", err);
-      return res.redirect("/login?error=" + encodeURIComponent("Google login failed. Please try again."));
+app.get(
+  "/auth/google/callback",
+  (req, res, next) => {
+    if (!googleAuthEnabled) {
+      return res.redirect("/login?error=" + encodeURIComponent("Google login is not configured."));
     }
-
-    req.session.user = userProfile;
+    next();
+  },
+  passport.authenticate("google", {
+    failureRedirect: "/login?error=" + encodeURIComponent("Google login failed. Please try again.")
+  }),
+  (_req, res) => {
     res.redirect("/dashboard");
-  })(req, res, next);
-});
+  }
+);
 
 // Log out and clear session
-app.post("/logout", (req, res) => {
-  req.session = null; // Clear all session data
-  res.redirect("/login");
+app.post("/logout", (req, res, next) => {
+  req.logout((err) => {
+    if (err) {
+      return next(err);
+    }
+    res.redirect("/login");
+  });
 });
 
 // Change password page
-app.get("/change-password", requireLogin, (req, res) => {
+app.get("/change-password", isLoggedIn, (req, res) => {
   const error = req.query.error ? decodeURIComponent(req.query.error) : null;
   const success = req.query.success ? decodeURIComponent(req.query.success) : null;
   res.render("change-password", { error, success });
 });
 
 // Change password route
-app.post("/change-password", requireLogin, async (req, res) => {
+app.post("/change-password", isLoggedIn, async (req, res) => {
   const { username, oldPassword, newPassword } = req.body;
 
   if (!username || !oldPassword || !newPassword) {
@@ -295,7 +338,7 @@ app.post("/change-password", requireLogin, async (req, res) => {
   try {
     const user = await User.findOne({ username });
 
-    if (!user || user._id.toString() !== req.session.user.id) {
+    if (!user || user._id.toString() !== req.user.id) {
       return res.redirect("/change-password?error=" + encodeURIComponent("You can only change your own password"));
     }
 
@@ -318,9 +361,9 @@ app.post("/change-password", requireLogin, async (req, res) => {
 });
 
 // Dashboard page: shows tasks for the current user
-app.get("/dashboard", requireLogin, async (req, res) => {
+app.get("/dashboard", isLoggedIn, async (req, res) => {
   try {
-    const tasks = await Task.find({ userId: req.session.user.id }).sort({
+    const tasks = await Task.find({ userId: req.user.id }).sort({
       order: 1,
       deadline: 1
     });
@@ -336,7 +379,7 @@ app.get("/dashboard", requireLogin, async (req, res) => {
 // ====== Routes: Task CRUD (form-based) ======
 
 // Create a new task from a form on the dashboard
-app.post("/tasks", requireLogin, async (req, res) => {
+app.post("/tasks", isLoggedIn, async (req, res) => {
   const { title, description, priority, deadline } = req.body;
   try {
     await Task.create({
@@ -344,7 +387,7 @@ app.post("/tasks", requireLogin, async (req, res) => {
       description: description ? description.toString() : "",
       priority: priority ? priority.toString() : "medium",
       deadline: deadline ? new Date(deadline) : undefined,
-      userId: req.session.user.id
+      userId: req.user.id
     });
     res.redirect("/dashboard?success=" + encodeURIComponent("Task created successfully!"));
   } catch (err) {
@@ -354,13 +397,13 @@ app.post("/tasks", requireLogin, async (req, res) => {
 });
 
 // Update a task status or details (simple demo: mark done/pending)
-app.post("/tasks/:id/status", requireLogin, async (req, res) => {
+app.post("/tasks/:id/status", isLoggedIn, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
   try {
     const task = await Task.findOneAndUpdate(
-      { _id: id, userId: req.session.user.id },
+      { _id: id, userId: req.user.id },
       { status: status || "pending" },
       { new: true }
     );
@@ -375,10 +418,10 @@ app.post("/tasks/:id/status", requireLogin, async (req, res) => {
 });
 
 // Delete a task
-app.post("/tasks/:id/delete", requireLogin, async (req, res) => {
+app.post("/tasks/:id/delete", isLoggedIn, async (req, res) => {
   const { id } = req.params;
   try {
-    const task = await Task.findOneAndDelete({ _id: id, userId: req.session.user.id });
+    const task = await Task.findOneAndDelete({ _id: id, userId: req.user.id });
     if (!task) {
       return res.redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
     }
@@ -393,9 +436,9 @@ app.post("/tasks/:id/delete", requireLogin, async (req, res) => {
 // These endpoints return/accept JSON instead of rendering pages.
 
 // GET /api/tasks - list tasks for current user
-app.get("/api/tasks", requireLogin, async (req, res) => {
+app.get("/api/tasks", isLoggedIn, async (req, res) => {
   try {
-    const tasks = await Task.find({ userId: req.session.user.id }).sort({
+    const tasks = await Task.find({ userId: req.user.id }).sort({
       order: 1,
       deadline: 1
     });
@@ -407,7 +450,7 @@ app.get("/api/tasks", requireLogin, async (req, res) => {
 });
 
 // POST /api/tasks/reorder - update task order after drag-and-drop
-app.post("/api/tasks/reorder", requireLogin, async (req, res) => {
+app.post("/api/tasks/reorder", isLoggedIn, async (req, res) => {
   const { taskIds } = req.body;
 
   if (!Array.isArray(taskIds)) {
@@ -415,7 +458,7 @@ app.post("/api/tasks/reorder", requireLogin, async (req, res) => {
   }
 
   try {
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const tasks = await Task.find({
       _id: { $in: taskIds },
       userId: userId
@@ -438,7 +481,7 @@ app.post("/api/tasks/reorder", requireLogin, async (req, res) => {
 });
 
 // POST /api/tasks - create a new task
-app.post("/api/tasks", requireLogin, async (req, res) => {
+app.post("/api/tasks", isLoggedIn, async (req, res) => {
   const { title, description, priority, deadline } = req.body;
   try {
     const task = await Task.create({
@@ -446,7 +489,7 @@ app.post("/api/tasks", requireLogin, async (req, res) => {
       description: description ? description.toString() : "",
       priority: priority ? priority.toString() : "medium",
       deadline: deadline ? new Date(deadline) : undefined,
-      userId: req.session.user.id
+      userId: req.user.id
     });
     res.status(201).json(task);
   } catch (err) {
@@ -456,7 +499,7 @@ app.post("/api/tasks", requireLogin, async (req, res) => {
 });
 
 // PUT /api/tasks/:id - update an existing task
-app.put("/api/tasks/:id", requireLogin, async (req, res) => {
+app.put("/api/tasks/:id", isLoggedIn, async (req, res) => {
   const { id } = req.params;
   const { title, description, priority, deadline, status } = req.body;
 
@@ -469,7 +512,7 @@ app.put("/api/tasks/:id", requireLogin, async (req, res) => {
 
   try {
     const task = await Task.findOneAndUpdate(
-      { _id: id, userId: req.session.user.id },
+      { _id: id, userId: req.user.id },
       updateData,
       { new: true, runValidators: false }
     );
@@ -484,12 +527,12 @@ app.put("/api/tasks/:id", requireLogin, async (req, res) => {
 });
 
 // DELETE /api/tasks/:id - delete a task
-app.delete("/api/tasks/:id", requireLogin, async (req, res) => {
+app.delete("/api/tasks/:id", isLoggedIn, async (req, res) => {
   const { id } = req.params;
   try {
     const task = await Task.findOneAndDelete({
       _id: id,
-      userId: req.session.user.id
+      userId: req.user.id
     });
     if (!task) {
       return res.status(404).json({ error: "Task not found" });
