@@ -9,7 +9,7 @@ A full-stack task management application built with Express.js, MongoDB, and EJS
 
 ## Features
 
-- ✅ User authentication with password hashing (bcrypt)
+- ✅ Simple username/password authentication
 - ✅ Task CRUD operations (Create, Read, Update, Delete)
 - ✅ Task prioritization (low, medium, high)
 - ✅ Task status tracking (pending, done)
@@ -153,7 +153,7 @@ For testing purposes, you can use these credentials or create your own:
 - **Username:** `demo_user`
 - **Password:** `demo123`
 
-> **Note:** New users are automatically created on first login. If a user doesn't exist, the system will create it with the provided password.
+> **Note:** Use the Register page to create new accounts before logging in.
 
 ### RESTful API Examples
 
@@ -196,7 +196,7 @@ For detailed API documentation with all endpoints, see [demo.md](./demo.md).
 
 ## Security Features
 
-- ✅ Password hashing with bcrypt (10 rounds)
+- ✅ Basic session checks (no password hashing)
 - ✅ Input validation and sanitization
 - ✅ XSS protection via input escaping
 - ✅ Secure session cookies (httpOnly, secure in production)
@@ -297,7 +297,7 @@ The application includes comprehensive error handling:
 ## Notes
 
 - New users are automatically created on first login
-- All passwords are hashed using bcrypt before storage
+- Passwords are stored as plain text to keep the demo simple
 - Sessions expire after 24 hours
 - The application requires MongoDB to be running and accessible
 - Drag-and-drop ordering is saved automatically when tasks are reordered

@@ -11,8 +11,7 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
-  passwordHash: {
-    // We store a hash of the password, NOT the plain text password
+  password: {
     type: String,
     required: true
   }

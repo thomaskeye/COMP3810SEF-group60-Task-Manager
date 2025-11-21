@@ -10,7 +10,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cookieSession = require("cookie-session");
 const path = require("path");
-const bcrypt = require("bcrypt");
 const { body, validationResult, param } = require("express-validator");
 require("dotenv").config();
 
@@ -140,56 +139,32 @@ app.get("/login", (req, res) => {
   res.render("login", { error });
 });
 
-// Handle login form submit with proper password authentication
-app.post(
-  "/login",
-  [
-    body("username")
-      .trim()
-      .isLength({ min: 3, max: 30 })
-      .withMessage("Username must be between 3 and 30 characters")
-      .matches(/^[a-zA-Z0-9_]+$/)
-      .withMessage("Username can only contain letters, numbers, and underscores")
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).render("login", {
-        error: errors.array()[0].msg
-      });
-    }
+// Handle login form submit (simple password check)
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
 
-    const { username, password } = req.body;
-
-    try {
-      const user = await User.findOne({ username });
-
-      if (!user) {
-        return res.status(404).render("login", {
-          error: "Account not found. Please register first."
-        });
-      }
-
-      const passwordMatch = await bcrypt.compare(password, user.passwordHash);
-      if (!passwordMatch) {
-        return res.status(401).render("login", {
-          error: "Invalid username or password. Please try again."
-        });
-      }
-
-      // Store a minimal user object in the session
-      req.session.user = {
-        id: user._id.toString(),
-        username: user.username
-      };
-
-      res.redirect("/dashboard");
-    } catch (err) {
-      console.error("Login error:", err);
-      res.status(500).render("login", { error: "Login failed. Try again." });
-    }
+  if (!username || !password) {
+    return res.render("login", { error: "Please enter both username and password." });
   }
-);
+
+  try {
+    const user = await User.findOne({ username });
+
+    if (!user || user.password !== password) {
+      return res.render("login", { error: "Invalid username or password." });
+    }
+
+    req.session.user = {
+      id: user._id.toString(),
+      username: user.username
+    };
+
+    res.redirect("/dashboard");
+  } catch (err) {
+    console.error("Login error:", err);
+    res.render("login", { error: "Login failed. Try again later." });
+  }
+});
 
 // Show register form
 app.get("/register", (req, res) => {
@@ -200,51 +175,33 @@ app.get("/register", (req, res) => {
   res.render("register", { error });
 });
 
-// Handle registration
-app.post(
-  "/register",
-  [
-    body("username")
-      .trim()
-      .isLength({ min: 3, max: 30 })
-      .withMessage("Username must be between 3 and 30 characters")
-      .matches(/^[a-zA-Z0-9_]+$/)
-      .withMessage("Username can only contain letters, numbers, and underscores"),
-    body("password").isLength({ min: 1 }).withMessage("Password is required")
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).render("register", {
-        error: errors.array()[0].msg
-      });
-    }
+// Handle registration (simple create)
+app.post("/register", async (req, res) => {
+  const { username, password } = req.body;
 
-    const { username, password } = req.body;
-
-    try {
-      const existingUser = await User.findOne({ username });
-      if (existingUser) {
-        return res.status(400).render("register", {
-          error: "Username already exists. Please choose another."
-        });
-      }
-
-      const passwordHash = await bcrypt.hash(password, 10);
-      const user = await User.create({ username, passwordHash });
-
-      req.session.user = {
-        id: user._id.toString(),
-        username: user.username
-      };
-
-      res.redirect("/dashboard");
-    } catch (err) {
-      console.error("Register error:", err);
-      res.status(500).render("register", { error: "Registration failed. Try again." });
-    }
+  if (!username || !password) {
+    return res.render("register", { error: "Please choose a username and password." });
   }
-);
+
+  try {
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.render("register", { error: "Username already exists." });
+    }
+
+    const user = await User.create({ username, password });
+
+    req.session.user = {
+      id: user._id.toString(),
+      username: user.username
+    };
+
+    res.redirect("/dashboard");
+  } catch (err) {
+    console.error("Register error:", err);
+    res.render("register", { error: "Registration failed. Try again later." });
+  }
+});
 
 // Log out and clear session
 app.post("/logout", (req, res) => {
@@ -260,64 +217,33 @@ app.get("/change-password", requireLogin, (req, res) => {
 });
 
 // Change password route
-app.post(
-  "/change-password",
-  requireLogin,
-  [
-    body("username")
-      .trim()
-      .isLength({ min: 3, max: 30 })
-      .withMessage("Username must be between 3 and 30 characters")
-      .matches(/^[a-zA-Z0-9_]+$/)
-      .withMessage("Username can only contain letters, numbers, and underscores"),
-    body("newPassword")
-      .custom((value, { req }) => {
-        if (value === req.body.oldPassword) {
-          throw new Error("New password must be different from old password");
-        }
-        return true;
-      })
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).redirect("/change-password?error=" + encodeURIComponent(errors.array()[0].msg));
-    }
+app.post("/change-password", requireLogin, async (req, res) => {
+  const { username, oldPassword, newPassword } = req.body;
 
-    const { username, oldPassword, newPassword } = req.body;
-
-    try {
-      // Find user by username
-      const user = await User.findOne({ username });
-
-      if (!user) {
-        return res.status(400).redirect("/change-password?error=" + encodeURIComponent("Username not found"));
-      }
-
-      // Verify old password
-      const passwordMatch = await bcrypt.compare(oldPassword, user.passwordHash);
-      if (!passwordMatch) {
-        return res.status(401).redirect("/change-password?error=" + encodeURIComponent("Old password is incorrect"));
-      }
-
-      // Verify that the username matches the logged-in user
-      if (user._id.toString() !== req.session.user.id) {
-        return res.status(403).redirect("/change-password?error=" + encodeURIComponent("You can only change your own password"));
-      }
-
-      // Hash new password and update
-      const newPasswordHash = await bcrypt.hash(newPassword, 10);
-      user.passwordHash = newPasswordHash;
-      await user.save();
-
-      // Redirect with success message
-      res.redirect("/change-password?success=Password changed successfully");
-    } catch (err) {
-      console.error("Change password error:", err);
-      res.status(500).redirect("/change-password?error=" + encodeURIComponent("Failed to change password. Try again."));
-    }
+  if (!username || !oldPassword || !newPassword) {
+    return res.redirect("/change-password?error=" + encodeURIComponent("All fields are required"));
   }
-);
+
+  try {
+    const user = await User.findOne({ username });
+
+    if (!user || user._id.toString() !== req.session.user.id) {
+      return res.redirect("/change-password?error=" + encodeURIComponent("You can only change your own password"));
+    }
+
+    if (user.password !== oldPassword) {
+      return res.redirect("/change-password?error=" + encodeURIComponent("Old password is incorrect"));
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.redirect("/change-password?success=Password changed successfully");
+  } catch (err) {
+    console.error("Change password error:", err);
+    res.redirect("/change-password?error=" + encodeURIComponent("Failed to change password. Try again later."));
+  }
+});
 
 // Dashboard page: shows tasks for the current user
 app.get("/dashboard", requireLogin, async (req, res) => {
