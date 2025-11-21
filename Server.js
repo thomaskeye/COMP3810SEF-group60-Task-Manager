@@ -9,6 +9,8 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cookieSession = require("cookie-session");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const path = require("path");
 require("dotenv").config();
 
@@ -57,6 +59,16 @@ if (!SESSION_SECRET) {
   console.warn("WARNING: SESSION_SECRET not set. Using default (insecure for production).");
 }
 
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_CALLBACK_URL =
+  process.env.GOOGLE_CALLBACK_URL || `http://localhost:${PORT}/auth/google/callback`;
+const googleAuthEnabled = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+
+if (!googleAuthEnabled) {
+  console.warn("Google OAuth not fully configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.");
+}
+
 // When running behind a proxy (e.g. Render, Heroku), trust the first proxy so secure cookies work
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
@@ -72,6 +84,51 @@ app.use(
     sameSite: "lax"
   })
 );
+
+app.use(passport.initialize());
+
+if (googleAuthEnabled) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: GOOGLE_CLIENT_ID,
+        clientSecret: GOOGLE_CLIENT_SECRET,
+        callbackURL: GOOGLE_CALLBACK_URL
+      },
+      async (_accessToken, _refreshToken, profile, done) => {
+        try {
+          let user = await User.findOne({ googleId: profile.id });
+
+          if (!user) {
+            const fallbackUsername =
+              (profile.emails && profile.emails[0] && profile.emails[0].value) ||
+              profile.displayName ||
+              `google_${profile.id}`;
+
+            user = await User.create({
+              username: fallbackUsername,
+              password: "",
+              googleId: profile.id,
+              displayName: profile.displayName || fallbackUsername
+            });
+          } else if (!user.displayName && profile.displayName) {
+            user.displayName = profile.displayName;
+            await user.save();
+          }
+
+          return done(null, {
+            id: user._id.toString(),
+            username: user.username,
+            displayName: user.displayName || user.username,
+            googleUser: true
+          });
+        } catch (err) {
+          return done(err);
+        }
+      }
+    )
+  );
+}
 
 // Set EJS as the view engine and configure views + public folders
 app.set("view engine", "ejs");
@@ -139,7 +196,8 @@ app.post("/login", async (req, res) => {
 
     req.session.user = {
       id: user._id.toString(),
-      username: user.username
+      username: user.username,
+      displayName: user.displayName || user.username
     };
 
     res.redirect("/dashboard");
@@ -172,11 +230,12 @@ app.post("/register", async (req, res) => {
       return res.render("register", { error: "Username already exists." });
     }
 
-    const user = await User.create({ username, password });
+    const user = await User.create({ username, password, displayName: username });
 
     req.session.user = {
       id: user._id.toString(),
-      username: user.username
+      username: user.username,
+      displayName: user.displayName || user.username
     };
 
     res.redirect("/dashboard");
@@ -184,6 +243,32 @@ app.post("/register", async (req, res) => {
     console.error("Register error:", err);
     res.render("register", { error: "Registration failed. Try again later." });
   }
+});
+
+// Google OAuth routes
+app.get("/auth/google", (req, res, next) => {
+  if (!googleAuthEnabled) {
+    return res.redirect("/login?error=" + encodeURIComponent("Google login is not configured."));
+  }
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    prompt: "select_account"
+  })(req, res, next);
+});
+
+app.get("/auth/google/callback", (req, res, next) => {
+  if (!googleAuthEnabled) {
+    return res.redirect("/login?error=" + encodeURIComponent("Google login is not configured."));
+  }
+  passport.authenticate("google", { session: false }, (err, userProfile) => {
+    if (err || !userProfile) {
+      console.error("Google login error:", err);
+      return res.redirect("/login?error=" + encodeURIComponent("Google login failed. Please try again."));
+    }
+
+    req.session.user = userProfile;
+    res.redirect("/dashboard");
+  })(req, res, next);
 });
 
 // Log out and clear session
@@ -212,6 +297,10 @@ app.post("/change-password", requireLogin, async (req, res) => {
 
     if (!user || user._id.toString() !== req.session.user.id) {
       return res.redirect("/change-password?error=" + encodeURIComponent("You can only change your own password"));
+    }
+
+    if (!user.password) {
+      return res.redirect("/change-password?error=" + encodeURIComponent("Google accounts cannot change password here"));
     }
 
     if (user.password !== oldPassword) {

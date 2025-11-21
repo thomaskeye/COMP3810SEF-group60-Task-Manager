@@ -10,6 +10,7 @@ A full-stack task management application built with Express.js, MongoDB, and EJS
 ## Features
 
 - ✅ Simple username/password authentication
+- ✅ "Login with Google" (OAuth 2.0) option
 - ✅ Task CRUD operations (Create, Read, Update, Delete)
 - ✅ Task prioritization (low, medium, high)
 - ✅ Task status tracking (pending, done)
@@ -17,7 +18,6 @@ A full-stack task management application built with Express.js, MongoDB, and EJS
 - ✅ **Drag-and-drop task ordering** (SortableJS)
 - ✅ **Calendar view** (FullCalendar) to visualize tasks by deadline
 - ✅ RESTful API endpoints
-- ✅ Input validation and sanitization
 - ✅ Secure session management
 - ✅ User-friendly error messages
 - ✅ Session expiry handling
@@ -39,32 +39,16 @@ MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database
 PORT=3000
 SESSION_SECRET=your_strong_random_secret_here
 NODE_ENV=production
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+# Optional: override the default callback (http://localhost:3000/auth/google/callback)
+GOOGLE_CALLBACK_URL=https://your-domain.com/auth/google/callback
 ```
 
-**Environment Variables:**
-- **MONGODB_URI**: Your MongoDB connection string
-  - For local MongoDB: `mongodb://localhost:27017/smart_task_manager`
-  - For MongoDB Atlas: `mongodb+srv://username:password@cluster.mongodb.net/database`
-- **PORT**: Server port (optional, defaults to 3000)
-- **SESSION_SECRET**: A strong random string for session encryption
-  - Generate one with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-- **NODE_ENV**: Set to `production` for production deployments
+To enable Google login you need a Google Cloud project with an OAuth 2.0 Web application client. Add `http://localhost:3000/auth/google/callback` (and your production URL) to the authorized redirect URIs, then copy the client ID and secret into the variables above.
 
-**Important:** 
-- Never commit your `.env` file to version control. It's already included in `.gitignore`.
-- The `.env.example` file is a template with placeholder values and is safe to commit.
 
-### 3. Run the Application
 
-**Development mode (with auto-reload):**
-```bash
-npm run dev
-```
-
-**Production mode:**
-```bash
-npm start
-```
 
 The server will start on `http://localhost:3000` (or the port specified in your `.env` file).
 
@@ -194,22 +178,20 @@ curl -X DELETE http://localhost:3000/api/tasks/TASK_ID \
 
 For detailed API documentation with all endpoints, see [demo.md](./demo.md).
 
-## Security Features
+## Security Notes
 
-- ✅ Basic session checks (no password hashing)
-- ✅ Input validation and sanitization
-- ✅ XSS protection via input escaping
-- ✅ Secure session cookies (httpOnly, secure in production)
-- ✅ MongoDB ObjectId validation
-- ✅ Input length limits
-- ✅ No hardcoded credentials
-- ✅ Session expiry handling with user-friendly messages
+- ✅ httpOnly cookie-session storage (secure flag automatically enabled in production)
+- ✅ Optional Google OAuth 2.0 login with verified Google accounts
+- ⚠️ Passwords created via the Register page are stored as plain text (demo only)
+- ⚠️ Server-side validation is intentionally minimal so you can experiment freely
 
 ## API Endpoints
 
 ### Authentication
 - `GET /login` - Login page
 - `POST /login` - Authenticate user
+- `GET /auth/google` - Start Google OAuth flow
+- `GET /auth/google/callback` - Google OAuth callback
 - `POST /logout` - Logout user
 - `GET /change-password` - Change password page
 - `POST /change-password` - Update password
@@ -229,26 +211,7 @@ For detailed API documentation with all endpoints, see [demo.md](./demo.md).
 
 ## Validation Rules
 
-### Username
-- 3-30 characters
-- Only letters, numbers, and underscores
-
-### Password
-- No minimum length requirement (but should be strong for security)
-
-### Task Title
-- 1-200 characters
-- Required
-
-### Task Description
-- Maximum 2000 characters
-- Optional
-
-### Priority
-- Must be: "low", "medium", or "high"
-
-### Status
-- Must be: "pending" or "done"
+The app intentionally keeps validation simple. Login and Register only require that the fields are filled in, while task forms and APIs accept whatever text/values you send so you can prototype quickly.
 
 ## Project Structure
 
