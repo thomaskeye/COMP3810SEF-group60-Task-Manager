@@ -10,7 +10,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cookieSession = require("cookie-session");
 const path = require("path");
-const { body, validationResult, param } = require("express-validator");
 require("dotenv").config();
 
 // Load Mongoose models
@@ -84,22 +83,6 @@ app.use((req, res, next) => {
   res.locals.currentUser = req.session.user || null;
   next();
 });
-
-// ====== Validation Middleware ======
-
-// Helper to check if ObjectId is valid
-function isValidObjectId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
-}
-
-// Validation error handler
-function handleValidationErrors(req, res, next) {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-  next();
-}
 
 // ====== Simple Auth Middleware ======
 
@@ -264,129 +247,58 @@ app.get("/dashboard", requireLogin, async (req, res) => {
 // ====== Routes: Task CRUD (form-based) ======
 
 // Create a new task from a form on the dashboard
-app.post(
-  "/tasks",
-  requireLogin,
-  [
-    body("title")
-      .trim()
-      .isLength({ min: 1, max: 200 })
-      .withMessage("Title must be between 1 and 200 characters")
-      .escape(),
-    body("description")
-      .optional()
-      .trim()
-      .isLength({ max: 2000 })
-      .withMessage("Description must be less than 2000 characters")
-      .escape(),
-    body("priority")
-      .optional()
-      .isIn(["low", "medium", "high"])
-      .withMessage("Priority must be low, medium, or high"),
-    body("deadline")
-      .optional()
-      .isISO8601()
-      .withMessage("Invalid date format")
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      // For form submissions, redirect back with user-friendly error message
-      const errorMsg = errors.array()[0].msg || "Invalid task input. Please check your data and try again.";
-      return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errorMsg));
-    }
-
+app.post("/tasks", requireLogin, async (req, res) => {
   const { title, description, priority, deadline } = req.body;
   try {
     await Task.create({
-        title: title.trim(),
-        description: description ? description.trim() : "",
-      priority: priority || "medium",
+      title: (title || "Untitled Task").toString(),
+      description: description ? description.toString() : "",
+      priority: priority ? priority.toString() : "medium",
       deadline: deadline ? new Date(deadline) : undefined,
       userId: req.session.user.id
     });
     res.redirect("/dashboard?success=" + encodeURIComponent("Task created successfully!"));
   } catch (err) {
     console.error("Create task error:", err);
-    const errorMsg = err.name === "ValidationError" 
-      ? "Invalid task data. Please check your input and try again."
-      : "Failed to create task. Please try again.";
-    res.status(500).redirect("/dashboard?error=" + encodeURIComponent(errorMsg));
+    res.status(500).redirect("/dashboard?error=" + encodeURIComponent("Failed to create task. Please try again."));
   }
-  }
-);
+});
 
 // Update a task status or details (simple demo: mark done/pending)
-app.post(
-  "/tasks/:id/status",
-  requireLogin,
-  [
-    param("id").custom((value) => {
-      if (!isValidObjectId(value)) {
-        throw new Error("Invalid task ID");
-      }
-      return true;
-    }),
-    body("status")
-      .isIn(["pending", "done"])
-      .withMessage("Status must be pending or done")
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errors.array()[0].msg));
-    }
-
+app.post("/tasks/:id/status", requireLogin, async (req, res) => {
   const { id } = req.params;
-    const { status } = req.body;
+  const { status } = req.body;
+
   try {
-      const task = await Task.findOneAndUpdate(
+    const task = await Task.findOneAndUpdate(
       { _id: id, userId: req.session.user.id },
-        { status },
-        { new: true }
+      { status: status || "pending" },
+      { new: true }
     );
-      if (!task) {
-        return res.status(404).redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
-      }
+    if (!task) {
+      return res.redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
+    }
     res.redirect("/dashboard?success=" + encodeURIComponent("Task status updated successfully!"));
   } catch (err) {
     console.error("Update task status error:", err);
     res.status(500).redirect("/dashboard?error=" + encodeURIComponent("Failed to update task. Please try again."));
   }
-  }
-);
+});
 
 // Delete a task
-app.post(
-  "/tasks/:id/delete",
-  requireLogin,
-  [
-    param("id").custom((value) => {
-      if (!isValidObjectId(value)) {
-        throw new Error("Invalid task ID");
-      }
-      return true;
-    })
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).redirect("/dashboard?error=" + encodeURIComponent(errors.array()[0].msg));
-    }
-
+app.post("/tasks/:id/delete", requireLogin, async (req, res) => {
   const { id } = req.params;
   try {
-      const task = await Task.findOneAndDelete({ _id: id, userId: req.session.user.id });
-      if (!task) {
-        return res.status(404).redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
-      }
+    const task = await Task.findOneAndDelete({ _id: id, userId: req.session.user.id });
+    if (!task) {
+      return res.redirect("/dashboard?error=" + encodeURIComponent("Task not found"));
+    }
     res.redirect("/dashboard?success=" + encodeURIComponent("Task deleted successfully!"));
   } catch (err) {
     console.error("Delete task error:", err);
     res.status(500).redirect("/dashboard?error=" + encodeURIComponent("Failed to delete task. Please try again."));
   }
-  }
-);
+});
 
 // ====== RESTful API Endpoints for Tasks ======
 // These endpoints return/accept JSON instead of rendering pages.
@@ -406,82 +318,44 @@ app.get("/api/tasks", requireLogin, async (req, res) => {
 });
 
 // POST /api/tasks/reorder - update task order after drag-and-drop
-app.post(
-  "/api/tasks/reorder",
-  requireLogin,
-  [
-    body("taskIds")
-      .isArray()
-      .withMessage("taskIds must be an array")
-      .notEmpty()
-      .withMessage("taskIds cannot be empty")
-  ],
-  handleValidationErrors,
-  async (req, res) => {
-    try {
-      const { taskIds } = req.body;
-      const userId = req.session.user.id;
+app.post("/api/tasks/reorder", requireLogin, async (req, res) => {
+  const { taskIds } = req.body;
 
-      // Verify all tasks belong to the user
-      const tasks = await Task.find({
-        _id: { $in: taskIds },
-        userId: userId
-      });
-
-      if (tasks.length !== taskIds.length) {
-        return res.status(403).json({ error: "Some tasks not found or unauthorized" });
-      }
-
-      // Update order for each task
-      const updatePromises = taskIds.map((taskId, index) => {
-        return Task.updateOne(
-          { _id: taskId, userId: userId },
-          { order: index }
-        );
-      });
-
-      await Promise.all(updatePromises);
-      res.json({ message: "Tasks reordered successfully" });
-    } catch (err) {
-      console.error("API reorder tasks error:", err);
-      res.status(500).json({ error: "Failed to reorder tasks" });
-    }
+  if (!Array.isArray(taskIds)) {
+    return res.status(400).json({ error: "taskIds must be an array" });
   }
-);
+
+  try {
+    const userId = req.session.user.id;
+    const tasks = await Task.find({
+      _id: { $in: taskIds },
+      userId: userId
+    });
+
+    if (tasks.length !== taskIds.length) {
+      return res.status(403).json({ error: "Some tasks not found or unauthorized" });
+    }
+
+    const updatePromises = taskIds.map((taskId, index) => {
+      return Task.updateOne({ _id: taskId, userId: userId }, { order: index });
+    });
+
+    await Promise.all(updatePromises);
+    res.json({ message: "Tasks reordered successfully" });
+  } catch (err) {
+    console.error("API reorder tasks error:", err);
+    res.status(500).json({ error: "Failed to reorder tasks" });
+  }
+});
 
 // POST /api/tasks - create a new task
-app.post(
-  "/api/tasks",
-  requireLogin,
-  [
-    body("title")
-      .trim()
-      .isLength({ min: 1, max: 200 })
-      .withMessage("Title must be between 1 and 200 characters")
-      .escape(),
-    body("description")
-      .optional()
-      .trim()
-      .isLength({ max: 2000 })
-      .withMessage("Description must be less than 2000 characters")
-      .escape(),
-    body("priority")
-      .optional()
-      .isIn(["low", "medium", "high"])
-      .withMessage("Priority must be low, medium, or high"),
-    body("deadline")
-      .optional()
-      .isISO8601()
-      .withMessage("Invalid date format")
-  ],
-  handleValidationErrors,
-  async (req, res) => {
+app.post("/api/tasks", requireLogin, async (req, res) => {
   const { title, description, priority, deadline } = req.body;
   try {
     const task = await Task.create({
-        title: title.trim(),
-        description: description ? description.trim() : "",
-      priority: priority || "medium",
+      title: (title || "Untitled Task").toString(),
+      description: description ? description.toString() : "",
+      priority: priority ? priority.toString() : "medium",
       deadline: deadline ? new Date(deadline) : undefined,
       userId: req.session.user.id
     });
@@ -490,63 +364,25 @@ app.post(
     console.error("API create task error:", err);
     res.status(500).json({ error: "Failed to create task" });
   }
-  }
-);
+});
 
 // PUT /api/tasks/:id - update an existing task
-app.put(
-  "/api/tasks/:id",
-  requireLogin,
-  [
-    param("id").custom((value) => {
-      if (!isValidObjectId(value)) {
-        throw new Error("Invalid task ID");
-      }
-      return true;
-    }),
-    body("title")
-      .optional()
-      .trim()
-      .isLength({ min: 1, max: 200 })
-      .withMessage("Title must be between 1 and 200 characters")
-      .escape(),
-    body("description")
-      .optional()
-      .trim()
-      .isLength({ max: 2000 })
-      .withMessage("Description must be less than 2000 characters")
-      .escape(),
-    body("priority")
-      .optional()
-      .isIn(["low", "medium", "high"])
-      .withMessage("Priority must be low, medium, or high"),
-    body("status")
-      .optional()
-      .isIn(["pending", "done"])
-      .withMessage("Status must be pending or done"),
-    body("deadline")
-      .optional()
-      .isISO8601()
-      .withMessage("Invalid date format")
-  ],
-  handleValidationErrors,
-  async (req, res) => {
+app.put("/api/tasks/:id", requireLogin, async (req, res) => {
   const { id } = req.params;
   const { title, description, priority, deadline, status } = req.body;
 
-    // Build update object only with provided fields
-    const updateData = {};
-    if (title !== undefined) updateData.title = title.trim();
-    if (description !== undefined) updateData.description = description.trim();
-    if (priority !== undefined) updateData.priority = priority;
-    if (status !== undefined) updateData.status = status;
-    if (deadline !== undefined) updateData.deadline = deadline ? new Date(deadline) : null;
+  const updateData = {};
+  if (title !== undefined) updateData.title = title.toString();
+  if (description !== undefined) updateData.description = description.toString();
+  if (priority !== undefined) updateData.priority = priority.toString();
+  if (status !== undefined) updateData.status = status.toString();
+  if (deadline !== undefined) updateData.deadline = deadline ? new Date(deadline) : null;
 
   try {
     const task = await Task.findOneAndUpdate(
       { _id: id, userId: req.session.user.id },
-        updateData,
-        { new: true, runValidators: true }
+      updateData,
+      { new: true, runValidators: false }
     );
     if (!task) {
       return res.status(404).json({ error: "Task not found" });
@@ -554,28 +390,12 @@ app.put(
     res.json(task);
   } catch (err) {
     console.error("API update task error:", err);
-      if (err.name === "ValidationError") {
-        return res.status(400).json({ error: "Validation error", details: err.message });
-      }
     res.status(500).json({ error: "Failed to update task" });
-    }
   }
-);
+});
 
 // DELETE /api/tasks/:id - delete a task
-app.delete(
-  "/api/tasks/:id",
-  requireLogin,
-  [
-    param("id").custom((value) => {
-      if (!isValidObjectId(value)) {
-        throw new Error("Invalid task ID");
-      }
-      return true;
-    })
-  ],
-  handleValidationErrors,
-  async (req, res) => {
+app.delete("/api/tasks/:id", requireLogin, async (req, res) => {
   const { id } = req.params;
   try {
     const task = await Task.findOneAndDelete({
@@ -590,8 +410,7 @@ app.delete(
     console.error("API delete task error:", err);
     res.status(500).json({ error: "Failed to delete task" });
   }
-  }
-);
+});
 
 // ====== Start Server ======
 
