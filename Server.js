@@ -436,7 +436,7 @@ app.post("/tasks/:id/delete", isLoggedIn, async (req, res) => {
 // These endpoints return/accept JSON instead of rendering pages.
 
 // GET /api/tasks - list tasks for current user
-app.get("/api/tasks", isLoggedIn, async (req, res) => {
+app.get("/api/tasks", async (req, res) => {
   try {
     const tasks = await Task.find({ userId: req.user.id }).sort({
       order: 1,
@@ -450,7 +450,7 @@ app.get("/api/tasks", isLoggedIn, async (req, res) => {
 });
 
 // POST /api/tasks/reorder - update task order after drag-and-drop
-app.post("/api/tasks/reorder", isLoggedIn, async (req, res) => {
+app.post("/api/tasks/reorder", async (req, res) => {
   const { taskIds } = req.body;
 
   if (!Array.isArray(taskIds)) {
@@ -481,7 +481,7 @@ app.post("/api/tasks/reorder", isLoggedIn, async (req, res) => {
 });
 
 // POST /api/tasks - create a new task
-app.post("/api/tasks", isLoggedIn, async (req, res) => {
+app.post("/api/tasks", async (req, res) => {
   const { title, description, priority, deadline } = req.body;
   try {
     const task = await Task.create({
@@ -499,7 +499,7 @@ app.post("/api/tasks", isLoggedIn, async (req, res) => {
 });
 
 // PUT /api/tasks/:id - update an existing task
-app.put("/api/tasks/:id", isLoggedIn, async (req, res) => {
+app.put("/api/tasks/:id", async (req, res) => {
   const { id } = req.params;
   const { title, description, priority, deadline, status } = req.body;
 
@@ -527,7 +527,7 @@ app.put("/api/tasks/:id", isLoggedIn, async (req, res) => {
 });
 
 // DELETE /api/tasks/:id - delete a task
-app.delete("/api/tasks/:id", isLoggedIn, async (req, res) => {
+app.delete("/api/tasks/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const task = await Task.findOneAndDelete({
