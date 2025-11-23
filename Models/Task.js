@@ -36,10 +36,10 @@ const taskSchema = new mongoose.Schema(
       default: 0
     },
     userId: {
-      // Reference to the User who owns this task
+      // Reference to the User who owns this task (optional for public API)
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true
+      required: false
     }
   },
   {

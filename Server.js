@@ -435,10 +435,10 @@ app.post("/tasks/:id/delete", async (req, res) => {
 // ====== RESTful API Endpoints for Tasks ======
 // These endpoints return/accept JSON instead of rendering pages.
 
-// GET /api/tasks - list tasks for current user
+// GET /api/tasks - list all tasks (public API)
 app.get("/api/tasks", async (req, res) => {
   try {
-    const tasks = await Task.find({ userId: req.user.id }).sort({
+    const tasks = await Task.find({}).sort({
       order: 1,
       deadline: 1
     });
@@ -449,7 +449,7 @@ app.get("/api/tasks", async (req, res) => {
   }
 });
 
-// POST /api/tasks/reorder - update task order after drag-and-drop
+// POST /api/tasks/reorder - update task order after drag-and-drop (public API)
 app.post("/api/tasks/reorder", async (req, res) => {
   const { taskIds } = req.body;
 
@@ -458,18 +458,16 @@ app.post("/api/tasks/reorder", async (req, res) => {
   }
 
   try {
-    const userId = req.user.id;
     const tasks = await Task.find({
-      _id: { $in: taskIds },
-      userId: userId
+      _id: { $in: taskIds }
     });
 
     if (tasks.length !== taskIds.length) {
-      return res.status(403).json({ error: "Some tasks not found or unauthorized" });
+      return res.status(404).json({ error: "Some tasks not found" });
     }
 
     const updatePromises = taskIds.map((taskId, index) => {
-      return Task.updateOne({ _id: taskId, userId: userId }, { order: index });
+      return Task.updateOne({ _id: taskId }, { order: index });
     });
 
     await Promise.all(updatePromises);
@@ -480,17 +478,23 @@ app.post("/api/tasks/reorder", async (req, res) => {
   }
 });
 
-// POST /api/tasks - create a new task
+// POST /api/tasks - create a new task (public API)
 app.post("/api/tasks", async (req, res) => {
   const { title, description, priority, deadline } = req.body;
   try {
-    const task = await Task.create({
+    const taskData = {
       title: (title || "Untitled Task").toString(),
       description: description ? description.toString() : "",
       priority: priority ? priority.toString() : "medium",
-      deadline: deadline ? new Date(deadline) : undefined,
-      userId: req.user.id
-    });
+      deadline: deadline ? new Date(deadline) : undefined
+    };
+    
+    // Set userId if user is authenticated, otherwise leave it undefined
+    if (req.user && req.user.id) {
+      taskData.userId = req.user.id;
+    }
+    
+    const task = await Task.create(taskData);
     res.status(201).json(task);
   } catch (err) {
     console.error("API create task error:", err);
@@ -498,7 +502,7 @@ app.post("/api/tasks", async (req, res) => {
   }
 });
 
-// PUT /api/tasks/:id - update an existing task
+// PUT /api/tasks/:id - update an existing task (public API)
 app.put("/api/tasks/:id", async (req, res) => {
   const { id } = req.params;
   const { title, description, priority, deadline, status } = req.body;
@@ -512,7 +516,7 @@ app.put("/api/tasks/:id", async (req, res) => {
 
   try {
     const task = await Task.findOneAndUpdate(
-      { _id: id, userId: req.user.id },
+      { _id: id },
       updateData,
       { new: true, runValidators: false }
     );
@@ -526,13 +530,12 @@ app.put("/api/tasks/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/tasks/:id - delete a task
+// DELETE /api/tasks/:id - delete a task (public API)
 app.delete("/api/tasks/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const task = await Task.findOneAndDelete({
-      _id: id,
-      userId: req.user.id
+      _id: id
     });
     if (!task) {
       return res.status(404).json({ error: "Task not found" });
