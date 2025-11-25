@@ -16,10 +16,17 @@ Members:
 ### server.js
 The overall functionality of a Smart Task Manager would include high-level purposes like:
 
-1. Task Creation & Capture: The ability to get tasks out of your head and into the system.
-2. Task Organization: The ability to structure, categorize, and prioritize tasks.
-3. Task Scheduling & Reminding: The ability to plan when tasks should be done and be notified about them.
-4. Task Execution Tracking: The ability to monitor progress and mark tasks as complete.
+1. User Authentication: Local and Google OAuth 2.0 login system
+
+2. Task CRUD Operations: Full create, read, update, delete functionality
+
+3. Session Management: Secure session handling with express-session
+
+4. RESTful API: JSON API endpoints for programmatic access
+
+5. Task Organization: Priority-based sorting and deadline management
+
+6. Drag & Drop Reordering: Interactive task reordering via API
 ### package.json
 
 ### public
