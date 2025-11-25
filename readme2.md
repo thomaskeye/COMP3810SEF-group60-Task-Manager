@@ -42,7 +42,8 @@ Sign-in Steps:
 
 4. Upon successful authentication, you'll be redirected to the dashboard
 
-5.To logout, click "Logout" in the navigation menu
+5. To logout, click "Logout" in the navigation menu
+
 ### Use of your CRUD web pages
 Create Tasks:
 
