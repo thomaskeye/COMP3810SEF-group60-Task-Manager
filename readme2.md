@@ -28,7 +28,39 @@ The overall functionality of a Smart Task Manager would include high-level purpo
 
 6. Drag & Drop Reordering: Interactive task reordering via API
 ### package.json
+### Core Dependencies:
 
+"express":"^4.21.2" - Web application framework
+
+"mongoose":"^8.6.0" - MongoDB object modeling
+
+"mongodb":"^7.0.0" - MongoDB driver
+
+"ejs":"^3.1.10" - Templating engine for views
+
+### Authentication & Security:
+
+"passport":"^0.7.0" - Authentication middleware
+
+"passport-local":"^1.0.0" - Local username/password strategy
+
+"passport-google-oauth20":"^2.0.0" - Google OAuth 2.0 strategy
+
+"express-session":"^1.18.0" - Session management
+
+"bcrypt":"^5.1.1" - Password hashing
+
+### Configuration:
+
+"dotenv":"^16.4.5" - Environment variable management
+
+### Development:
+
+"nodemon":"^3.1.7" - Auto-restart during development
+
+### Scripts:
+
+npm start - Production server start
 ### public
 
 ### views
@@ -65,7 +97,7 @@ Read/View Tasks:
 
 2. Click on any task card to view detailed information
 
-3.Use filter options to view tasks by status, priority, or category
+3. Use filter options to view tasks by status, priority, or category
 
 Update Tasks:
 1. Click "Edit" button on any task card
