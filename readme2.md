@@ -118,9 +118,11 @@ Delete Tasks:
   
 ### Use of your RESTFUL CRUD sevices
 GET:
+
 -list all tasks
 
 POST:
+
 -update task order after drag-and-drop
 
 -create a new task
