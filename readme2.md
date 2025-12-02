@@ -62,51 +62,52 @@ The overall functionality of a Smart Task Manager would include high-level purpo
 
 npm start - Production server start
 ### public
-
+-css
+-js
 ### views
-
+-change-password.ejs
+-dashboard.ejs
+-login.ejs
+-register.ejs
 ### models
-
+-Task.js
+-USer.js
 ## Cloud-based server URL
-
+https://comp3810sef-group60-task-manger.onrender.com
 ## Operation guides 
 ### Use of Login/Logout pages
 Sign-in Steps:
 
-1. Navigate to the home page or click "Login" in the navigation
+1. Register an account OR Continue with your previous account or Google 
 
-2. Enter valid email and password
+2. Enter valid username and password OR Click the "Continue with Google" button
 
-3. Click "Sign In" button
+3. Click "Login" button
 
 4. Upon successful authentication, you'll be redirected to the dashboard
 
-5. To logout, click "Logout" in the navigation menu
+5. To logout, click "Logout" button at the right top corner
 
 ### Use of your CRUD web pages
 Create Tasks:
 
-1. Click "Add New Task" button on dashboard
+1. Fill in task details (title, dedline, description, priority)
 
-2. Fill in task details (title, description, due date, priority, category)
+2. Click "Add Task" button on dashboard
 
-3. Click "Create Task" to save
+3. "Task created successfully!" message will be shown
 
 Read/View Tasks:
-1. Dashboard shows all tasks in a organized view
+1. Dashboard shows all tasks in a organized view 
 
-2. Click on any task card to view detailed information
+2. There are list view or calendar view
 
-3. Use filter options to view tasks by status, priority, or category
+3. Calendar viw can show in month, week or list
+ 
+4. Click on any task card to view detailed information
 
 Update Tasks:
-1. Click "Edit" button on any task card
-
-2. Modify task details in the edit form
-
-3. Click "Update Task" to save changes
-
-4. Mark tasks as complete using the "Complete" button
+1. Mark tasks as complete using the "Mark Done" button
 
 Delete Tasks:
 1. Click "Delete" button on any task card
@@ -116,3 +117,4 @@ Delete Tasks:
 3. Tasks are permanently removed from the system
   
 ### Use of your RESTFUL CRUD sevices
+GET:
