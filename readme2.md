@@ -121,19 +121,26 @@ GET:
 
 -list all tasks
 
+-command:curl -X GET "https://comp3810sef-group60-task-manger.onrender.com/api/tasks"  \\Read all tasks from app
+
+
 POST:
 
 -update task order after drag-and-drop
 
 -create a new task
 
+-command:curl -X POST "https://comp3810sef-group60-task-manger.onrender.com/api/tasks" -d '{"title":"Demo Task","description":"Created via CURL","priority":"high"}' \\Create "Demo Task" task
+
 PUT:
 
 -update an existing task
+
+-command: curl -X PUT "https://comp3810sef-group60-task-manger.onrender.com/api/tasks/<TaskID>" -d '{"status":"done","priority":"low"}' \\update <Task> by TaskID
 
 DELETE:
 
 -delete a task
 
-
+-command:curl -X DELETE "https://comp3810sef group60-task manger.onrender.com/api/tasks/<TaskID>"  \\DELETE <Task> by TaskID
 
